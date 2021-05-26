@@ -1,0 +1,10 @@
+{
+  "accessKeyIdSecretRef": {
+    "name": "nifcloud-secret",
+    "key": "access-key-id"
+  },
+  "secretAccessKeySecretRef": {
+    "name": "nifcloud-secret",
+    "key": "secret-access-key"
+  }
+}

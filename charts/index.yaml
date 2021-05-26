@@ -1,0 +1,13 @@
+apiVersion: v1
+entries:
+  cert-manager-nifcloud-webhook:
+  - apiVersion: v1
+    appVersion: v0.0.1
+    created: "2021-05-27T13:48:10.920224001+09:00"
+    description: cert-manager webhook for NIFCLOUD
+    digest: 1b2ffc2cf8e0fd0247125008d0186b39015ffbdf9e178669db6be4d11de73079
+    name: cert-manager-nifcloud-webhook
+    urls:
+    - https://raw.githubusercontent.com/aokumasan/cert-manager-nifcloud-webhook/master/charts/cert-manager-nifcloud-webhook-v0.0.1.tgz
+    version: v0.0.1
+generated: "2021-05-27T13:48:10.919193509+09:00"

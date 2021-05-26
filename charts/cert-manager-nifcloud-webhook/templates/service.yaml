@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nifcloud-webhook.fullname" . }}
+  labels:
+    app: {{ include "nifcloud-webhook.name" . }}
+    chart: {{ include "nifcloud-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: https
+      protocol: TCP
+      name: https
+  selector:
+    app: {{ include "nifcloud-webhook.name" . }}
+    release: {{ .Release.Name }}
