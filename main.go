@@ -7,9 +7,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/aokumasan/cert-manager-nifcloud-webhook/internal"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/platform/wait"
+
+	"github.com/nifcloud/nifcloud-sdk-go/nifcloud"
+	"github.com/nifcloud/nifcloud-sdk-go/service/dns"
 
 	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,7 +53,7 @@ type nifcloudDNSProviderSolver struct {
 	// 4. ensure your webhook's service account has the required RBAC role
 	//    assigned to it for interacting with the Kubernetes APIs you need.
 	client         *kubernetes.Clientset
-	nifcloudClient *internal.Client
+	nifcloudClient *dns.Client
 }
 
 // nifcloudDNSProviderConfig is a structure that is used to decode into when
@@ -147,12 +149,8 @@ func (c *nifcloudDNSProviderSolver) prepareNifcloudClient(ch *v1alpha1.Challenge
 		return err
 	}
 
-	client, err := internal.NewClient(string(accessKeyID), string(secretAccessKey))
-	if err != nil {
-		return err
-	}
-
-	c.nifcloudClient = client
+	cloudCfg := nifcloud.NewConfig(string(accessKeyID), string(secretAccessKey), "jp-east-1")
+	c.nifcloudClient = dns.New(cloudCfg)
 
 	return nil
 }
@@ -186,24 +184,32 @@ func (c *nifcloudDNSProviderSolver) loadSecretData(selector cmmetav1.SecretKeySe
 }
 
 func (c *nifcloudDNSProviderSolver) changeRecord(action, fqdn, value string, ttl int) error {
-	name := dns01.UnFqdn(fqdn)
+	ctx := context.Background()
 
-	reqParams := internal.ChangeResourceRecordSetsRequest{
-		XMLNs: internal.XMLNs,
-		ChangeBatch: internal.ChangeBatch{
-			Comment: "Managed by cert-manager-nifcloud-webhook",
-			Changes: internal.Changes{
-				Change: []internal.Change{
+	name := dns01.UnFqdn(fqdn)
+	authZone, err := dns01.FindZoneByFqdn(fqdn)
+	if err != nil {
+		return fmt.Errorf("failed to find zone: %w", err)
+	}
+
+	req := c.nifcloudClient.ChangeResourceRecordSetsRequest(
+		&dns.ChangeResourceRecordSetsInput{
+			ZoneID:  nifcloud.String(dns01.UnFqdn(authZone)),
+			Comment: nifcloud.String("Managed by cert-manager-nifcloud-webhoo"),
+			RequestChangeBatch: &dns.RequestChangeBatch{
+				ListOfRequestChanges: []dns.RequestChanges{
 					{
-						Action: action,
-						ResourceRecordSet: internal.ResourceRecordSet{
-							Name: name,
-							Type: "TXT",
-							TTL:  ttl,
-							ResourceRecords: internal.ResourceRecords{
-								ResourceRecord: []internal.ResourceRecord{
+						RequestChange: &dns.RequestChange{
+							Action: nifcloud.String(action),
+							RequestResourceRecordSet: &dns.RequestResourceRecordSet{
+								Name: nifcloud.String(name),
+								Type: nifcloud.String("TXT"),
+								TTL:  nifcloud.Int64(int64(ttl)),
+								ListOfRequestResourceRecords: []dns.RequestResourceRecords{
 									{
-										Value: value,
+										RequestResourceRecord: &dns.RequestResourceRecord{
+											Value: nifcloud.String(value),
+										},
 									},
 								},
 							},
@@ -212,25 +218,23 @@ func (c *nifcloudDNSProviderSolver) changeRecord(action, fqdn, value string, ttl
 				},
 			},
 		},
-	}
+	)
 
-	authZone, err := dns01.FindZoneByFqdn(fqdn)
-	if err != nil {
-		return fmt.Errorf("failed to find zone: %w", err)
-	}
-
-	resp, err := c.nifcloudClient.ChangeResourceRecordSets(dns01.UnFqdn(authZone), reqParams)
+	resp, err := req.Send(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to change record set: %w", err)
 	}
 
-	statusID := resp.ChangeInfo.ID
+	changeID := resp.ChangeInfo.Id
 
 	return wait.For("nifcloud", 120*time.Second, 4*time.Second, func() (bool, error) {
-		resp, err := c.nifcloudClient.GetChange(statusID)
+		req := c.nifcloudClient.GetChangeRequest(&dns.GetChangeInput{
+			ChangeID: changeID,
+		})
+		resp, err := req.Send(ctx)
 		if err != nil {
 			return false, fmt.Errorf("failed to query change status: %w", err)
 		}
-		return resp.ChangeInfo.Status == "INSYNC", nil
+		return nifcloud.StringValue(resp.ChangeInfo.Status) == "INSYNC", nil
 	})
 }
