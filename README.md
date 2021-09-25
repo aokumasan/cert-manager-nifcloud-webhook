@@ -17,7 +17,7 @@ See [official document](https://cert-manager.io/docs/installation/kubernetes/).
 
 ```bash
 $ helm repo add cert-manager-nifcloud-webhook https://raw.githubusercontent.com/aokumasan/cert-manager-nifcloud-webhook/master/charts
-$ helm install cert-manager-nifcloud-webhook cert-manager-nifcloud-webhook/cert-manager-nifcloud-webhook --namespace cert-manager --version v0.0.1
+$ helm install cert-manager-nifcloud-webhook cert-manager-nifcloud-webhook/cert-manager-nifcloud-webhook --namespace cert-manager --version v0.0.2
 ```
 
 ## Create an issuer
