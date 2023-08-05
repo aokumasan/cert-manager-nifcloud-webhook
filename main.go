@@ -96,8 +96,8 @@ func (c *nifcloudDNSProviderSolver) Name() string {
 // cert-manager itself will later perform a self check to ensure that the
 // solver has correctly configured the DNS provider.
 func (c *nifcloudDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
-	if c.nifcloudClient == nil {
-		c.prepareNifcloudClient(ch)
+	if err := c.prepareNifcloudClient(ch); err != nil {
+		return fmt.Errorf("failed to prepare NIFCLOUD client: %w", err)
 	}
 
 	return c.changeRecord("CREATE", ch.ResolvedFQDN, ch.Key, dns01.DefaultTTL)
@@ -110,8 +110,8 @@ func (c *nifcloudDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error
 // This is in order to facilitate multiple DNS validations for the same domain
 // concurrently.
 func (c *nifcloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
-	if c.nifcloudClient == nil {
-		c.prepareNifcloudClient(ch)
+	if err := c.prepareNifcloudClient(ch); err != nil {
+		return fmt.Errorf("failed to prepare NIFCLOUD client: %w", err)
 	}
 
 	return c.changeRecord("DELETE", ch.ResolvedFQDN, ch.Key, dns01.DefaultTTL)
@@ -129,7 +129,7 @@ func (c *nifcloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error
 func (c *nifcloudDNSProviderSolver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan struct{}) error {
 	cl, err := kubernetes.NewForConfig(kubeClientConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
 	c.client = cl
@@ -140,13 +140,16 @@ func (c *nifcloudDNSProviderSolver) Initialize(kubeClientConfig *rest.Config, st
 func (c *nifcloudDNSProviderSolver) prepareNifcloudClient(ch *v1alpha1.ChallengeRequest) error {
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	accessKeyID, err := c.loadSecretData(cfg.AccessKeyIDSecretRef, ch.ResourceNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to load access key id: %w", err)
+	}
 	secretAccessKey, err := c.loadSecretData(cfg.SecretAccessKeySecretRef, ch.ResourceNamespace)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load secret access key: %w", err)
 	}
 
 	cloudCfg := nifcloud.NewConfig(string(accessKeyID), string(secretAccessKey), "jp-east-1")
@@ -164,7 +167,7 @@ func loadConfig(cfgJSON *extapi.JSON) (nifcloudDNSProviderConfig, error) {
 		return cfg, nil
 	}
 	if err := json.Unmarshal(cfgJSON.Raw, &cfg); err != nil {
-		return cfg, fmt.Errorf("error decoding solver config: %v", err)
+		return cfg, fmt.Errorf("error decoding solver config: %w", err)
 	}
 
 	return cfg, nil
@@ -173,7 +176,7 @@ func loadConfig(cfgJSON *extapi.JSON) (nifcloudDNSProviderConfig, error) {
 func (c *nifcloudDNSProviderSolver) loadSecretData(selector cmmetav1.SecretKeySelector, ns string) ([]byte, error) {
 	secret, err := c.client.CoreV1().Secrets(ns).Get(context.Background(), selector.Name, metav1.GetOptions{})
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to load secret %q", ns+"/"+selector.Name)
+		return nil, fmt.Errorf("failed to load secret %q: %w", ns+"/"+selector.Name, err)
 	}
 
 	if data, ok := secret.Data[selector.Key]; ok {
