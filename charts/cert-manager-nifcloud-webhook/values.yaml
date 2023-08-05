@@ -14,7 +14,7 @@ certManager:
 
 image:
   repository: ghcr.io/aokumasan/cert-manager-nifcloud-webhook
-  tag: v0.0.2
+  tag: ""
   pullPolicy: IfNotPresent
 
 nameOverride: ""
