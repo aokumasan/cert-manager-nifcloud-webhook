@@ -15,10 +15,8 @@ COPY . .
 
 RUN CGO_ENABLED=0 go build -o webhook -ldflags '-w -extldflags "-static"' .
 
-FROM alpine:3.9
+FROM gcr.io/distroless/static:nonroot
 
-RUN apk add --no-cache ca-certificates tzdata && cp /usr/share/zoneinfo/GMT /etc/localtime
+COPY --from=build /workspace/webhook /bin/webhook
 
-COPY --from=build /workspace/webhook /usr/local/bin/webhook
-
-ENTRYPOINT ["webhook"]
+ENTRYPOINT ["/bin/webhook"]
