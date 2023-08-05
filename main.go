@@ -12,16 +12,16 @@ import (
 
 	"github.com/nifcloud/nifcloud-sdk-go/nifcloud"
 	"github.com/nifcloud/nifcloud-sdk-go/service/dns"
+	"github.com/nifcloud/nifcloud-sdk-go/service/dns/types"
 
-	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	extapiv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/jetstack/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
-	"github.com/jetstack/cert-manager/pkg/acme/webhook/cmd"
-	cmmetav1 "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
-	"github.com/pkg/errors"
+	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
+	"github.com/cert-manager/cert-manager/pkg/acme/webhook/cmd"
+	cmmetav1 "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 )
 
 var GroupName = os.Getenv("GROUP_NAME")
@@ -153,14 +153,14 @@ func (c *nifcloudDNSProviderSolver) prepareNifcloudClient(ch *v1alpha1.Challenge
 	}
 
 	cloudCfg := nifcloud.NewConfig(string(accessKeyID), string(secretAccessKey), "jp-east-1")
-	c.nifcloudClient = dns.New(cloudCfg)
+	c.nifcloudClient = dns.NewFromConfig(cloudCfg)
 
 	return nil
 }
 
 // loadConfig is a small helper function that decodes JSON configuration into
 // the typed config struct.
-func loadConfig(cfgJSON *extapi.JSON) (nifcloudDNSProviderConfig, error) {
+func loadConfig(cfgJSON *extapiv1.JSON) (nifcloudDNSProviderConfig, error) {
 	cfg := nifcloudDNSProviderConfig{}
 	// handle the 'base case' where no configuration has been provided
 	if cfgJSON == nil {
@@ -183,10 +183,15 @@ func (c *nifcloudDNSProviderSolver) loadSecretData(selector cmmetav1.SecretKeySe
 		return data, nil
 	}
 
-	return nil, errors.Errorf("no key %q in secret %q", selector.Key, ns+"/"+selector.Name)
+	return nil, fmt.Errorf("no key %q in secret %q", selector.Key, ns+"/"+selector.Name)
 }
 
-func (c *nifcloudDNSProviderSolver) changeRecord(action, fqdn, value string, ttl int) error {
+func (c *nifcloudDNSProviderSolver) changeRecord(
+	action types.ActionOfChangeResourceRecordSetsRequestForChangeResourceRecordSets,
+	fqdn string,
+	value string,
+	ttl int,
+) error {
 	ctx := context.Background()
 
 	name := dns01.UnFqdn(fqdn)
@@ -195,24 +200,22 @@ func (c *nifcloudDNSProviderSolver) changeRecord(action, fqdn, value string, ttl
 		return fmt.Errorf("failed to find zone: %w", err)
 	}
 
-	req := c.nifcloudClient.ChangeResourceRecordSetsRequest(
-		&dns.ChangeResourceRecordSetsInput{
-			ZoneID:  nifcloud.String(dns01.UnFqdn(authZone)),
-			Comment: nifcloud.String("Managed by cert-manager-nifcloud-webhoo"),
-			RequestChangeBatch: &dns.RequestChangeBatch{
-				ListOfRequestChanges: []dns.RequestChanges{
-					{
-						RequestChange: &dns.RequestChange{
-							Action: nifcloud.String(action),
-							RequestResourceRecordSet: &dns.RequestResourceRecordSet{
-								Name: nifcloud.String(name),
-								Type: nifcloud.String("TXT"),
-								TTL:  nifcloud.Int64(int64(ttl)),
-								ListOfRequestResourceRecords: []dns.RequestResourceRecords{
-									{
-										RequestResourceRecord: &dns.RequestResourceRecord{
-											Value: nifcloud.String(value),
-										},
+	input := &dns.ChangeResourceRecordSetsInput{
+		ZoneID:  nifcloud.String(dns01.UnFqdn(authZone)),
+		Comment: nifcloud.String("Managed by cert-manager-nifcloud-webhook"),
+		RequestChangeBatch: &types.RequestChangeBatch{
+			ListOfRequestChanges: []types.RequestChanges{
+				{
+					RequestChange: &types.RequestChange{
+						Action: action,
+						RequestResourceRecordSet: &types.RequestResourceRecordSet{
+							Name: nifcloud.String(name),
+							Type: types.TypeOfChangeResourceRecordSetsRequestForChangeResourceRecordSetsTxt,
+							TTL:  nifcloud.Int32(int32(ttl)),
+							ListOfRequestResourceRecords: []types.RequestResourceRecords{
+								{
+									RequestResourceRecord: &types.RequestResourceRecord{
+										Value: nifcloud.String(value),
 									},
 								},
 							},
@@ -221,9 +224,9 @@ func (c *nifcloudDNSProviderSolver) changeRecord(action, fqdn, value string, ttl
 				},
 			},
 		},
-	)
+	}
 
-	resp, err := req.Send(ctx)
+	resp, err := c.nifcloudClient.ChangeResourceRecordSets(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to change record set: %w", err)
 	}
@@ -231,13 +234,13 @@ func (c *nifcloudDNSProviderSolver) changeRecord(action, fqdn, value string, ttl
 	changeID := resp.ChangeInfo.Id
 
 	return wait.For("nifcloud", 120*time.Second, 4*time.Second, func() (bool, error) {
-		req := c.nifcloudClient.GetChangeRequest(&dns.GetChangeInput{
+		input := &dns.GetChangeInput{
 			ChangeID: changeID,
-		})
-		resp, err := req.Send(ctx)
+		}
+		resp, err := c.nifcloudClient.GetChange(ctx, input)
 		if err != nil {
 			return false, fmt.Errorf("failed to query change status: %w", err)
 		}
-		return nifcloud.StringValue(resp.ChangeInfo.Status) == "INSYNC", nil
+		return nifcloud.ToString(resp.ChangeInfo.Status) == "INSYNC", nil
 	})
 }
