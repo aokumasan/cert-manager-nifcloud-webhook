@@ -1,7 +1,7 @@
 OS ?= $(shell go env GOOS)
 ARCH ?= $(shell go env GOARCH)
 
-IMAGE_NAME := "aokumasan/cert-manager-nifcloud-webhook"
+IMAGE_NAME := "ghcr.io/aokumasan/cert-manager-nifcloud-webhook"
 IMAGE_TAG := "latest"
 
 OUT := $(shell pwd)/_out
