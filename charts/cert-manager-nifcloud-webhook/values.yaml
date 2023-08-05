@@ -13,7 +13,7 @@ certManager:
   serviceAccountName: cert-manager
 
 image:
-  repository: aokumasan/cert-manager-nifcloud-webhook
+  repository: ghcr.io/aokumasan/cert-manager-nifcloud-webhook
   tag: v0.0.2
   pullPolicy: IfNotPresent
 
