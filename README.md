@@ -16,8 +16,8 @@ See [official document](https://cert-manager.io/docs/installation/kubernetes/).
 ### nifcloud-webhook
 
 ```bash
-$ helm repo add cert-manager-nifcloud-webhook https://raw.githubusercontent.com/aokumasan/cert-manager-nifcloud-webhook/master/charts
-$ helm install cert-manager-nifcloud-webhook cert-manager-nifcloud-webhook/cert-manager-nifcloud-webhook --namespace cert-manager --version v0.0.2
+$ helm repo add cert-manager-nifcloud-webhook https://raw.githubusercontent.com/aokumasan/cert-manager-nifcloud-webhook/main/charts
+$ helm upgrade --install cert-manager-nifcloud-webhook cert-manager-nifcloud-webhook/cert-manager-nifcloud-webhook --namespace cert-manager
 ```
 
 ## Create an issuer
@@ -36,8 +36,7 @@ data:
   secret-access-key: <base64 encoded secret access key>
 
 ---
-
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
   name: nifcloud-issuer
