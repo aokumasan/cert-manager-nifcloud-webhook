@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-acme/lego/v4/challenge/dns01"
@@ -22,6 +23,11 @@ import (
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/cmd"
 	cmmetav1 "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+)
+
+const (
+	createAction = types.ActionOfChangeResourceRecordSetsRequestForChangeResourceRecordSetsCreate
+	deleteAction = types.ActionOfChangeResourceRecordSetsRequestForChangeResourceRecordSetsDelete
 )
 
 var GroupName = os.Getenv("GROUP_NAME")
@@ -100,7 +106,7 @@ func (c *nifcloudDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error
 		return fmt.Errorf("failed to prepare NIFCLOUD client: %w", err)
 	}
 
-	return c.changeRecord("CREATE", ch.ResolvedFQDN, ch.Key, dns01.DefaultTTL)
+	return c.changeRecord(createAction, ch.ResolvedFQDN, ch.Key, dns01.DefaultTTL)
 }
 
 // CleanUp should delete the relevant TXT record from the DNS provider console.
@@ -114,7 +120,7 @@ func (c *nifcloudDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error
 		return fmt.Errorf("failed to prepare NIFCLOUD client: %w", err)
 	}
 
-	return c.changeRecord("DELETE", ch.ResolvedFQDN, ch.Key, dns01.DefaultTTL)
+	return c.changeRecord(deleteAction, ch.ResolvedFQDN, ch.Key, dns01.DefaultTTL)
 }
 
 // Initialize will be called when the webhook first starts.
@@ -228,6 +234,10 @@ func (c *nifcloudDNSProviderSolver) changeRecord(
 
 	resp, err := c.nifcloudClient.ChangeResourceRecordSets(ctx, input)
 	if err != nil {
+		if action == deleteAction && isRecordNotFoundError(err) {
+			// record is already deleted.
+			return nil
+		}
 		return fmt.Errorf("failed to change record set: %w", err)
 	}
 
@@ -243,4 +253,8 @@ func (c *nifcloudDNSProviderSolver) changeRecord(
 		}
 		return nifcloud.ToString(resp.ChangeInfo.Status) == "INSYNC", nil
 	})
+}
+
+func isRecordNotFoundError(err error) bool {
+	return strings.Contains(err.Error(), "NO SUCH RECORD EXIST")
 }
