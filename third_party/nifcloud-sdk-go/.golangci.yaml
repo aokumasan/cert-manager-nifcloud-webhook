@@ -1,0 +1,19 @@
+run:
+  concurrency: 4
+  deadline: 10m
+  skip-dirs-use-default: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - goimports
+    - gosec
+    - govet
+    - lll
+    - misspell
+    - unused
+    - staticcheck
+
+issues:
+  exclude-use-default: false

@@ -1,0 +1,43 @@
+name: Build
+on: [push, pull_request]
+env:
+  GOPROXY: https://proxy.golang.org
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.20' ]
+    name: Go ${{ matrix.go }} lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Installdeps
+        run: make install-deps
+
+      - name: Lint
+        run: make lint
+
+  unit-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.20' ]
+    name: Go ${{ matrix.go }} unit-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Unit tests
+        run: make unit
