@@ -1,0 +1,9 @@
+{
+  "Computing": "computing",
+  "DNS": "dns",
+  "ESS": "ess",
+  "NAS": "nas",
+  "ObjectStorageService": "storage",
+  "RDB": "rdb",
+  "ServiceActivity": "serviceActivity"
+}
